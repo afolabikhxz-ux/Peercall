@@ -1,0 +1,46 @@
+allprojects {
+    tasks.register("noNetworkReferencesCheck") {
+        doLast {
+            val forbidden = listOf(
+                "okhttp",
+                "retrofit",
+                "URLConnection",
+                "java.net.URL",
+                "java.net.HttpURLConnection",
+                "HttpURLConnection",
+                "new URL(",
+                "URL("
+            )
+
+            val files = fileTree(project.rootDir) {
+                include("**/*.kt")
+                include("**/*.java")
+                exclude("**/build/**")
+                exclude("**/.gradle/**")
+            }
+
+            val hits = mutableListOf<String>()
+            files.forEach { file ->
+                val relative = file.relativeTo(project.rootDir).path
+                val content = file.readText(Charsets.UTF_8)
+                forbidden.forEach { term ->
+                    if (content.contains(term, ignoreCase = true)) {
+                        hits += "$relative: $term"
+                    }
+                }
+            }
+
+            if (hits.isNotEmpty()) {
+                throw GradleException("Network references are not allowed.\n${hits.joinToString("\n")}")
+            }
+        }
+    }
+}
+
+subprojects {
+    tasks.whenTaskAdded { task ->
+        if (task.name == "check") {
+            task.dependsOn(tasks.named("noNetworkReferencesCheck"))
+        }
+    }
+}
